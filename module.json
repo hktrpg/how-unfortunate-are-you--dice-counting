@@ -1,6 +1,6 @@
 {
-    "id": "fvtt-journal-show-online-player-first",
-    "title": "Journel show online player first",
+    "id": "how-unfortunate-are-you--dice-counting",
+    "title": "How unfortunate are you? DiceCounting",
     "description": "Tiny module. Show online player first in Journal and Permission Control.",
     "version": "1.0",
     "compatibility": {
@@ -23,7 +23,7 @@
     "styles": [],
     "packs": [],
     "languages": [],
-    "url": "https://github.com/hktrpg/fvtt-Journal-show-online-player-first",
-    "manifest": "https://raw.githubusercontent.com/hktrpg/fvtt-Journal-show-online-player-first/main/module.json",
-    "download": "https://github.com/hktrpg/fvtt-Journal-show-online-player-first/releases/latest/download/module.zip"
+    "url": "https://github.com/hktrpg/how-unfortunate-are-you--dice-counting",
+    "manifest": "https://raw.githubusercontent.com/hktrpg/how-unfortunate-are-you--dice-counting/main/module.json",
+    "download": "https://github.com/hktrpg/how-unfortunate-are-you--dice-counting/releases/latest/download/module.zip"
 }
