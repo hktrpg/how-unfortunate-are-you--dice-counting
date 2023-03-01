@@ -1,0 +1,29 @@
+{
+    "id": "fvtt-journal-show-online-player-first",
+    "title": "Journel show online player first",
+    "description": "Tiny module. Show online player first in Journal and Permission Control.",
+    "version": "1.0",
+    "compatibility": {
+        "minimum": "10",
+        "verified": "10"
+    },
+    "authors": [
+        {
+            "name": "HKTRPG",
+            "discord": "zzz#8939",
+            "flags": {}
+        }
+    ],
+    "esmodules": [
+        "index.js"
+    ],
+    "scripts": [
+        "index.js"
+    ],
+    "styles": [],
+    "packs": [],
+    "languages": [],
+    "url": "https://github.com/hktrpg/fvtt-Journal-show-online-player-first",
+    "manifest": "https://raw.githubusercontent.com/hktrpg/fvtt-Journal-show-online-player-first/main/module.json",
+    "download": "https://github.com/hktrpg/fvtt-Journal-show-online-player-first/releases/latest/download/module.zip"
+}
