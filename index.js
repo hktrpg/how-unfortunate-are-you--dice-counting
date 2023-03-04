@@ -65,7 +65,10 @@ Hooks.on('renderChatMessage', (message) => {
 //diceSoNiceRollStart(X, Y)
 //Y.roll.dice
 
+
+
 class DiceRoller {
+
     constructor() {
         // this.diceResults = {}; // 存放每種骰子的統計數據
         // this.loadDiceResults();
@@ -73,11 +76,7 @@ class DiceRoller {
     }
 
     static main() {
-        /**
-         * 1.
-         * 2.
-         * 3.
-         */
+
     }
 
     static readHtmlCode(string) {
@@ -229,6 +228,21 @@ class DiceRoller {
         JournalEntry.create({ name: entryName });
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const htmlText = `<h1><strong>某人</strong></h1>
 <h2><a id="D6"></a>D6</h2>
