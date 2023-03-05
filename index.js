@@ -1,6 +1,7 @@
 const entryName = "HKTRPG's Dice Counting";
 Hooks.once("init", () => {
     console.log("How unfortunate are you? DiceCounting 1.0| Initializing");
+    DiceRoller.checkEntryExist();
 });
 
 /**
@@ -45,17 +46,7 @@ Hooks.once("init", () => {
 
 Hooks.on('renderChatMessage', (message) => {
     try {
-        let name = message.speaker.alias;
-        console.log('message', message)
-        const rolls = message.rolls;
-        if (rolls.length === 0) return;
-        const roll = rolls[0];
-        const dices = roll.dice;
-        if (dices.length === 0) return;
-        DiceRoller.main(dices, name);
-
-
-
+        DiceRoller.main(message);
     } catch (error) {
         console.log('error', error)
     }
@@ -68,7 +59,6 @@ Hooks.on('renderChatMessage', (message) => {
 
 
 class DiceRoller {
-
     constructor() {
         // this.diceResults = {}; // 存放每種骰子的統計數據
         // this.loadDiceResults();
@@ -76,42 +66,46 @@ class DiceRoller {
     }
 
     static main() {
+        //1. get dice data
+        let { dices, name } = DiceRoller.checkDice(message);
+        if (!dices) return;
+        //2. check Entry Exist 
+        //if not exist, create new Entry
+        DiceRoller.checkEntryExist();
 
+        //3. check Page Exist
+        let { target, page } = DiceRoller.checkPageExist(name);
+        if (!page) {
+            //if not exist, create new Page
+            page = DiceRoller.__createNewPage(target, name, htmlText);
+        }
+        //4. get Page Data
+        let data = DiceRoller.readHtmlCode(page.content);
+
+        //5. update Page Data
+        let newData = DiceRoller.updateData(data, dices);
+        
+        //5.1 render new html code
+        let newHtmlText = DiceRoller.renderHtmlCode(newData);
+
+        //6. update Page
+        DiceRoller.__updatePage(target, newHtmlText, page);
+
+    }
+    static checkDice(message) {
+        let name = message.speaker.alias;
+        console.log('message', message)
+        const rolls = message.rolls;
+        if (rolls.length === 0) return;
+        const roll = rolls[0];
+        const dices = roll.dice;
+        if (dices.length === 0) return;
+        return { dices, name };
     }
 
     static readHtmlCode(string) {
         // 創建一個空對象
-        const result = {
-            name: '',
-            D6: {
-                times: [],
-                mean: [],
-                max: [],
-                min: [],
-                last: []
-            },
-            D10: {
-                times: [],
-                mean: [],
-                max: [],
-                min: [],
-                last: []
-            },
-            D20: {
-                times: [],
-                mean: [],
-                max: [],
-                min: [],
-                last: []
-            },
-            D100: {
-                times: [],
-                mean: [],
-                max: [],
-                min: [],
-                last: []
-            }
-        };
+        const result = { name: '', D6: { times: [], mean: [], max: [], min: [], last: [] }, D10: { times: [], mean: [], max: [], min: [], last: [] }, D20: { times: [], mean: [], max: [], min: [], last: [] }, D100: { times: [], mean: [], max: [], min: [], last: [] } };
 
         // 正則表達式來匹配名稱
         const nameRegex = /<h1><strong>(.*?)<\/strong>.*<\/h1>/s;
@@ -125,20 +119,16 @@ class DiceRoller {
         for (const block of blocks) {
             const id = block[1];
             const data = block[0];
-
             // 根據區塊 ID 創建對象屬性
             result[id] = parseData(data);
 
         }
-
         // 解析區塊內容並返回對象
         function parseData(data) {
             const result = {};
-
             // 正則表達式來匹配數據行
             const rowRegex = /<strong id="(.*)">.+?:<\/strong>\s*((?:\d?\.?\d?,?\s*)+)\s*(?:<br>|<\/p>)/g;
             const rows = data.matchAll(rowRegex);
-
             // 遍歷所有匹配的數據行
             for (const row of rows) {
                 console.log('row', row)
@@ -146,17 +136,15 @@ class DiceRoller {
                 const value = row[2] !== '</p>' ? row[2].split(",").map((x) => x.trim()) : null;
                 result[key] = value;
             }
-
             // 如果對象中所有值都是空字符串，返回 null
             return Object.values(result).some((v) => v !== null && v !== "") ? result : null;
         }
-
         console.log(Object.keys(result), result);
         return result;
     }
 
     static updateData(data, newData) {
-        let allRoll = analysisData(newData);
+        let allRoll = __analysisData(newData);
         for (let roll of allRoll) {
             let key = `D${roll.face}`;
             data[key].times++;
@@ -169,7 +157,7 @@ class DiceRoller {
         return data;
 
     }
-    static analysisData(fvttData) {
+    static __analysisData(fvttData) {
         let allRoll = [];
         let rolls = fvttData.rolls[0].dice;
         for (let roll of rolls) {
@@ -203,25 +191,27 @@ class DiceRoller {
 
     }
 
-    static updateEntry(name, content) {
+    static checkEntryExist() {
         let target = game.journal.find(v => v.name == entryName)
         if (!target) {
-            __createNewEntry(name);
-            target = game.journal.find(v => v.name == entryName)
+            __createNewEntry();
         }
-        const page = target.pages.find(v => v.name == name)
-        if (!page) {
-            __createNewPage(target, name, content);
-            return;
-        }
-        const newPage = { "text.content": content, _id: page._id };
+    }
 
+    static checkPageExist(name) {
+        const target = game.journal.find(v => v.name == entryName)
+        const page = target.pages.find(v => v.name == name)
+        return { target, page };
+    }
+
+    static __updatePage(target, content, page) {
+        const newPage = { "text.content": content, _id: page._id };
         target.updateEmbeddedDocuments("JournalEntryPage", [newPage]);
     }
 
     static __createNewPage(target, name, content) {
-        let newPage = { "name": name, "text.content": content };
-        target.createEmbeddedDocuments("JournalEntryPage", [newPage])
+        let newPage = { "name": name, "text.content": content.replace('某人', name) };
+        return target.createEmbeddedDocuments("JournalEntryPage", [newPage])
     }
 
     static __createNewEntry() {
@@ -246,32 +236,32 @@ class DiceRoller {
 
 const htmlText = `<h1><strong>某人</strong></h1>
 <h2><a id="D6"></a>D6</h2>
-            <p><strong id="times">已擲骰次數:</strong> 40<br>
-            <strong id="mean">平均值:</strong> 3.5<br>
-            <strong id="max">擲出最大值次數:</strong> 10<br>
-            <strong id="min">擲出最小值次數:</strong> 20<br>
-            <strong id="last">最近三十次結果:</strong> 2, 5, 6, 1, 2</p>
+            <p><strong id="times">已擲骰次數:</strong> 0<br>
+            <strong id="mean">平均值:</strong> 0<br>
+            <strong id="max">擲出最大值次數:</strong> 0<br>
+            <strong id="min">擲出最小值次數:</strong> 0<br>
+            <strong id="last">最近三十次結果:</strong> </p>
 
             <h2><a id="D10"></a>D10</h2>
-            <p><strong id="times">已擲骰次數:</strong> 40<br>
-            <strong id="mean">平均值:</strong> 3.5<br>
-            <strong id="max">擲出最大值次數:</strong> 10<br>
-            <strong id="min">擲出最小值次數:</strong> 20<br>
-            <strong id="last">最近三十次結果:</strong> 2, 5, 6, 1, 2</p>
+            <p><strong id="times">已擲骰次數:</strong> 0<br>
+            <strong id="mean">平均值:</strong> 0<br>
+            <strong id="max">擲出最大值次數:</strong> 0<br>
+            <strong id="min">擲出最小值次數:</strong> 0<br>
+            <strong id="last">最近三十次結果:</strong> </p>
 
             <h2><a id="D20"></a>D20</h2>
-            <p><strong id="times">已擲骰次數:</strong> 40<br>
-            <strong id="mean">平均值:</strong> 3.5<br>
-            <strong id="max">擲出最大值次數:</strong> 10<br>
-            <strong id="min">擲出最小值次數:</strong> 20<br>
-            <strong id="last">最近三十次結果:</strong> 2, 5, 6, 1, 2</p>
+            <p><strong id="times">已擲骰次數:</strong> 0<br>
+            <strong id="mean">平均值:</strong> 0<br>
+            <strong id="max">擲出最大值次數:</strong> 0<br>
+            <strong id="min">擲出最小值次數:</strong> 0<br>
+            <strong id="last">最近三十次結果:</strong> </p>
 
             <h2><a id="D100"></a>D100</h2>
-            <p><strong id="times">已擲骰次數:</strong> 40<br>
-            <strong id="mean">平均值:</strong> 3.5<br>
-            <strong id="max">擲出最大值次數:</strong> 10<br>
-            <strong id="min">擲出最小值次數:</strong> 20<br>
-            <strong id="last">最近三十次結果:</strong> 2, 5, 6, 1, 2</p>
+            <p><strong id="times">已擲骰次數:</strong> 0<br>
+            <strong id="mean">平均值:</strong> 0<br>
+            <strong id="max">擲出最大值次數:</strong> 0<br>
+            <strong id="min">擲出最小值次數:</strong> 0<br>
+            <strong id="last">最近三十次結果:</strong> </p>
 
 `
 
