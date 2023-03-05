@@ -1,5 +1,5 @@
 const entryName = "HKTRPG's Dice Counting";
-Hooks.once("init", () => {
+Hooks.once("ready", () => {
     console.log("How unfortunate are you? DiceCounting 1.0| Initializing");
     DiceRoller.checkEntryExist();
 });
@@ -48,7 +48,7 @@ Hooks.on('renderChatMessage', (message) => {
     try {
         DiceRoller.main(message);
     } catch (error) {
-        console.log('error', error)
+        console.error('error', error)
     }
 });
 
@@ -65,26 +65,27 @@ class DiceRoller {
         //  this.updateHTML();
     }
 
-    static main() {
+    static async main(message) {
         //1. get dice data
         let { dices, name } = DiceRoller.checkDice(message);
-        if (!dices) return;
+        if (!dices.length) return;
         //2. check Entry Exist 
         //if not exist, create new Entry
-        DiceRoller.checkEntryExist();
+        await DiceRoller.checkEntryExist();
 
         //3. check Page Exist
         let { target, page } = DiceRoller.checkPageExist(name);
         if (!page) {
             //if not exist, create new Page
-            page = DiceRoller.__createNewPage(target, name, htmlText);
+            page = await DiceRoller.__createNewPage(target, name, htmlText);
         }
+        console.debug('page', page)
         //4. get Page Data
-        let data = DiceRoller.readHtmlCode(page.content);
-
+        let data = DiceRoller.readHtmlCode(page[0].text.content);
+        console.log('readHtmlCode data', data)
         //5. update Page Data
         let newData = DiceRoller.updateData(data, dices);
-        
+
         //5.1 render new html code
         let newHtmlText = DiceRoller.renderHtmlCode(newData);
 
@@ -94,18 +95,19 @@ class DiceRoller {
     }
     static checkDice(message) {
         let name = message.speaker.alias;
+        let dices = [];
         console.log('message', message)
         const rolls = message.rolls;
-        if (rolls.length === 0) return;
+        if (rolls.length === 0) return { dices, name };
         const roll = rolls[0];
-        const dices = roll.dice;
-        if (dices.length === 0) return;
+        dices = roll.dice;
         return { dices, name };
     }
 
     static readHtmlCode(string) {
+        console.log('string', string)
         // 創建一個空對象
-        const result = { name: '', D6: { times: [], mean: [], max: [], min: [], last: [] }, D10: { times: [], mean: [], max: [], min: [], last: [] }, D20: { times: [], mean: [], max: [], min: [], last: [] }, D100: { times: [], mean: [], max: [], min: [], last: [] } };
+        const result = { name: '', D6: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D10: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D20: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D100: { times: 0, mean: 0, max: 0, min: 0, last: [] } };
 
         // 正則表達式來匹配名稱
         const nameRegex = /<h1><strong>(.*?)<\/strong>.*<\/h1>/s;
@@ -117,6 +119,7 @@ class DiceRoller {
 
         // 遍歷所有匹配的區塊
         for (const block of blocks) {
+            console.log('block', block)
             const id = block[1];
             const data = block[0];
             // 根據區塊 ID 創建對象屬性
@@ -127,8 +130,9 @@ class DiceRoller {
         function parseData(data) {
             const result = {};
             // 正則表達式來匹配數據行
-            const rowRegex = /<strong id="(.*)">.+?:<\/strong>\s*((?:\d?\.?\d?,?\s*)+)\s*(?:<br>|<\/p>)/g;
+            const rowRegex = /<strong id="(.*)">.+?:<\/strong>\s*((?:\d?\.?\d?,?\s*)+)\s?(?:<br\s?\/?>|<\/p>)/g;
             const rows = data.matchAll(rowRegex);
+            console.log('rows', rows)
             // 遍歷所有匹配的數據行
             for (const row of rows) {
                 console.log('row', row)
@@ -136,15 +140,17 @@ class DiceRoller {
                 const value = row[2] !== '</p>' ? row[2].split(",").map((x) => x.trim()) : null;
                 result[key] = value;
             }
+            console.log('parseData result', result)
             // 如果對象中所有值都是空字符串，返回 null
             return Object.values(result).some((v) => v !== null && v !== "") ? result : null;
         }
-        console.log(Object.keys(result), result);
+        console.log('OBJECT', Object.keys(result), result);
         return result;
     }
 
     static updateData(data, newData) {
-        let allRoll = __analysisData(newData);
+        let allRoll = DiceRoller.__analysisData(newData);
+        console.log('updateData', data)
         for (let roll of allRoll) {
             let key = `D${roll.face}`;
             data[key].times++;
@@ -158,9 +164,9 @@ class DiceRoller {
 
     }
     static __analysisData(fvttData) {
+        console.log('fvttData', fvttData)
         let allRoll = [];
-        let rolls = fvttData.rolls[0].dice;
-        for (let roll of rolls) {
+        for (let roll of fvttData) {
             for (let result of roll.results) {
                 let dice = {
                     face: roll.face,
@@ -191,15 +197,16 @@ class DiceRoller {
 
     }
 
-    static checkEntryExist() {
+    static async checkEntryExist() {
         let target = game.journal.find(v => v.name == entryName)
         if (!target) {
-            __createNewEntry();
+            await DiceRoller.__createNewEntry();
         }
     }
 
     static checkPageExist(name) {
         const target = game.journal.find(v => v.name == entryName)
+        console.log('checkPageExist target', target)
         const page = target.pages.find(v => v.name == name)
         return { target, page };
     }
@@ -209,13 +216,14 @@ class DiceRoller {
         target.updateEmbeddedDocuments("JournalEntryPage", [newPage]);
     }
 
-    static __createNewPage(target, name, content) {
+    static async __createNewPage(target, name, content) {
         let newPage = { "name": name, "text.content": content.replace('某人', name) };
-        return target.createEmbeddedDocuments("JournalEntryPage", [newPage])
+        return await target.createEmbeddedDocuments("JournalEntryPage", [newPage])
     }
 
-    static __createNewEntry() {
-        JournalEntry.create({ name: entryName });
+    static async __createNewEntry() {
+        console.log('create new entry')
+        await JournalEntry.create({ name: entryName });
     }
 }
 

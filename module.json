@@ -14,9 +14,7 @@
             "flags": {}
         }
     ],
-    "esmodules": [
-        "index.js"
-    ],
+    "esmodules": [],
     "scripts": [
         "index.js"
     ],
