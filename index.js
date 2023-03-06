@@ -97,7 +97,6 @@ class DiceRoller {
             //4. get Page Data
             let contect = page?.text?.content || page[0].text.content;
             let data = DiceRoller.readHtmlCode(contect);
-            console.log('readHtmlCode data', data)
             //5. update Page Data
             let newData = await DiceRoller.updateData(data, dices);
 
@@ -113,7 +112,7 @@ class DiceRoller {
 
     }
     static checkDice(message) {
-        let name = message.speaker.alias;
+        let name = message.user.name;
         let dices = [];
         console.log('message', message)
         const rolls = message.rolls;
@@ -189,7 +188,6 @@ class DiceRoller {
 
     }
     static __analysisData(fvttData) {
-        console.log('fvttData', fvttData)
         let allRoll = [];
         for (let roll of fvttData) {
             for (let result of roll.results) {
@@ -231,13 +229,11 @@ class DiceRoller {
 
     static async checkPageExist(name) {
         const target = game.journal.find(v => v.name == entryName)
-        console.log('checkPageExist target', target)
         const page = target.pages.find(v => v.name == name)
         return { target, page };
     }
 
     static async __updatePage(target, content, page) {
-        console.log('update page', target, content, page)
         const _id = page?._id || page[0]._id;
         const newPage = { "text.content": content, _id };
         await target.updateEmbeddedDocuments("JournalEntryPage", [newPage]);
@@ -249,7 +245,6 @@ class DiceRoller {
     }
 
     static async __createNewEntry() {
-        console.log('create new entry')
         await JournalEntry.create({ name: entryName });
     }
 }
