@@ -20,7 +20,18 @@
     ],
     "styles": [],
     "packs": [],
-    "languages": [],
+    "languages": [
+        {
+            "lang": "en",
+            "name": "English",
+            "path": "./lang/en.json"
+        },
+        {
+            "lang": "zh-tw",
+            "name": "正體中文",
+            "path": "./lang/zh-tw.json"
+        }
+    ],
     "url": "https://github.com/hktrpg/how-unfortunate-are-you--dice-counting",
     "manifest": "https://raw.githubusercontent.com/hktrpg/how-unfortunate-are-you--dice-counting/main/module.json",
     "download": "https://github.com/hktrpg/how-unfortunate-are-you--dice-counting/releases/latest/download/module.zip"

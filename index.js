@@ -1,7 +1,10 @@
 const entryName = "HKTRPG's Dice Counting";
-Hooks.once("ready", () => {
+const diceCounting = ['D4', 'D6', 'D8', 'D10', 'D12', 'D20', 'D100'];
+let ready = false;
+Hooks.once("ready", async () => {
     console.log("How unfortunate are you? DiceCounting 1.0| Initializing");
-    DiceRoller.checkEntryExist();
+    await DiceRoller.checkEntryExist();
+    ready = true;
 });
 
 /**
@@ -44,9 +47,17 @@ Hooks.once("ready", () => {
  */
 
 
-Hooks.on('renderChatMessage', (message) => {
+Hooks.on('createChatMessage', (chatMessage) => {
+    console.log('chatMessage', chatMessage)
+    if (!ready) return;
+    if ((!chatMessage.isRoll) ||
+        //   (game.view != "stream" && (!game.dice3d || game.dice3d.messageHookDisabled)) ||
+        (chatMessage.getFlag("core", "RollTable"))) {
+        return;
+    }
+
     try {
-        DiceRoller.main(message);
+        DiceRoller.main(chatMessage);
     } catch (error) {
         console.error('error', error)
     }
@@ -66,31 +77,39 @@ class DiceRoller {
     }
 
     static async main(message) {
-        //1. get dice data
-        let { dices, name } = DiceRoller.checkDice(message);
-        if (!dices.length) return;
-        //2. check Entry Exist 
-        //if not exist, create new Entry
-        await DiceRoller.checkEntryExist();
+        try {
 
-        //3. check Page Exist
-        let { target, page } = DiceRoller.checkPageExist(name);
-        if (!page) {
-            //if not exist, create new Page
-            page = await DiceRoller.__createNewPage(target, name, htmlText);
+
+            //1. get dice data
+            let { dices, name } = DiceRoller.checkDice(message);
+            if (!dices.length) return;
+            //2. check Entry Exist 
+            //if not exist, create new Entry
+            await DiceRoller.checkEntryExist();
+
+            //3. check Page Exist
+            let { target, page } = await DiceRoller.checkPageExist(name);
+            if (!page) {
+                //if not exist, create new Page
+                page = await DiceRoller.__createNewPage(target, name, htmlText);
+            }
+            console.debug('page', page)
+            //4. get Page Data
+            let contect = page?.text?.content || page[0].text.content;
+            let data = DiceRoller.readHtmlCode(contect);
+            console.log('readHtmlCode data', data)
+            //5. update Page Data
+            let newData = await DiceRoller.updateData(data, dices);
+
+            //5.1 render new html code
+            let newHtmlText = DiceRoller.renderHtmlCode(newData);
+
+            //6. update Page
+            await DiceRoller.__updatePage(target, newHtmlText, page);
+        } catch (error) {
+            console.error('error', error)
+            return;
         }
-        console.debug('page', page)
-        //4. get Page Data
-        let data = DiceRoller.readHtmlCode(page[0].text.content);
-        console.log('readHtmlCode data', data)
-        //5. update Page Data
-        let newData = DiceRoller.updateData(data, dices);
-
-        //5.1 render new html code
-        let newHtmlText = DiceRoller.renderHtmlCode(newData);
-
-        //6. update Page
-        DiceRoller.__updatePage(target, newHtmlText, page);
 
     }
     static checkDice(message) {
@@ -107,7 +126,7 @@ class DiceRoller {
     static readHtmlCode(string) {
         console.log('string', string)
         // 創建一個空對象
-        const result = { name: '', D6: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D10: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D20: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D100: { times: 0, mean: 0, max: 0, min: 0, last: [] } };
+        const result = { name: '', D4: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D6: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D8: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D10: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D12: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D20: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D100: { times: 0, mean: 0, max: 0, min: 0, last: [] } };
 
         // 正則表達式來匹配名稱
         const nameRegex = /<h1><strong>(.*?)<\/strong>.*<\/h1>/s;
@@ -137,7 +156,8 @@ class DiceRoller {
             for (const row of rows) {
                 console.log('row', row)
                 const key = row[1].trim();
-                const value = row[2] !== '</p>' ? row[2].split(",").map((x) => x.trim()) : null;
+                let value = row[2] !== '</p>' ? row[2].split(",").map((x) => x.trim()) : null;
+                if (key !== 'last') value = Number(value[0]);
                 result[key] = value;
             }
             console.log('parseData result', result)
@@ -152,13 +172,18 @@ class DiceRoller {
         let allRoll = DiceRoller.__analysisData(newData);
         console.log('updateData', data)
         for (let roll of allRoll) {
+            console.log('roll', roll)
             let key = `D${roll.face}`;
+            console.log(key, (diceCounting.indexOf(key) > -1))
+            if (!(diceCounting.indexOf(key) > -1)) continue;
+            console.log('data[key]', key, data[key])
             data[key].times++;
             data[key].mean = (data[key].mean * (data[key].times - 1) + roll.result) / data[key].times;
             if (roll.result === roll.face) data[key].max++;
             if (roll.result === 1) data[key].min++;
             data[key].last.push(roll.result);
             if (data[key].last.length > 30) data[key].last.shift();
+            if (data[key].last[0] === '' && data[key].last.length > 1) data[key].last.shift();
         }
         return data;
 
@@ -169,7 +194,7 @@ class DiceRoller {
         for (let roll of fvttData) {
             for (let result of roll.results) {
                 let dice = {
-                    face: roll.face,
+                    face: roll.faces,
                     result: result.result
                 }
                 allRoll.push(dice);
@@ -183,16 +208,16 @@ class DiceRoller {
         for (let key in data) {
             if (key !== 'name') {
                 html += `<h2><a id="${key}"></a>${key}</h2>
-                <p><strong id="times">已擲骰次數:</strong> ${data[key].times}<br>
-                <strong id="mean">平均值:</strong> ${data[key].mean}<br>
-                <strong id="max">擲出最大值次數:</strong> ${data[key].max}<br>
-                <strong id="min">擲出最小值次數:</strong> ${data[key].min}<br>
-                <strong id="last">最近三十次結果:</strong> ${data[key].last.join(', ')}</p>
+                <p><strong id="times">${game.i18n.localize("times")}:</strong> ${data[key].times}<br>
+                <strong id="mean">${game.i18n.localize("mean")}:</strong> ${data[key].mean}<br>
+                <strong id="max">${game.i18n.localize("max")}:</strong> ${data[key].max}<br>
+                <strong id="min">${game.i18n.localize("min")}:</strong> ${data[key].min}<br>
+                <strong id="last">${game.i18n.localize("last")}:</strong> ${data[key].last.join(', ')}</p>
                 
                 `;
             }
         }
-        console.log(html)
+        //console.log(html)
         return html;
 
     }
@@ -204,16 +229,18 @@ class DiceRoller {
         }
     }
 
-    static checkPageExist(name) {
+    static async checkPageExist(name) {
         const target = game.journal.find(v => v.name == entryName)
         console.log('checkPageExist target', target)
         const page = target.pages.find(v => v.name == name)
         return { target, page };
     }
 
-    static __updatePage(target, content, page) {
-        const newPage = { "text.content": content, _id: page._id };
-        target.updateEmbeddedDocuments("JournalEntryPage", [newPage]);
+    static async __updatePage(target, content, page) {
+        console.log('update page', target, content, page)
+        const _id = page?._id || page[0]._id;
+        const newPage = { "text.content": content, _id };
+        await target.updateEmbeddedDocuments("JournalEntryPage", [newPage]);
     }
 
     static async __createNewPage(target, name, content) {
@@ -243,7 +270,21 @@ class DiceRoller {
 
 
 const htmlText = `<h1><strong>某人</strong></h1>
-<h2><a id="D6"></a>D6</h2>
+            <h2><a id="D4"></a>D4</h2>
+            <p><strong id="times">已擲骰次數:</strong> 0<br>
+            <strong id="mean">平均值:</strong> 0<br>
+            <strong id="max">擲出最大值次數:</strong> 0<br>
+            <strong id="min">擲出最小值次數:</strong> 0<br>
+            <strong id="last">最近三十次結果:</strong> </p>
+
+            <h2><a id="D6"></a>D6</h2>
+            <p><strong id="times">已擲骰次數:</strong> 0<br>
+            <strong id="mean">平均值:</strong> 0<br>
+            <strong id="max">擲出最大值次數:</strong> 0<br>
+            <strong id="min">擲出最小值次數:</strong> 0<br>
+            <strong id="last">最近三十次結果:</strong> </p>
+
+            <h2><a id="D8"></a>D8</h2>
             <p><strong id="times">已擲骰次數:</strong> 0<br>
             <strong id="mean">平均值:</strong> 0<br>
             <strong id="max">擲出最大值次數:</strong> 0<br>
@@ -251,6 +292,13 @@ const htmlText = `<h1><strong>某人</strong></h1>
             <strong id="last">最近三十次結果:</strong> </p>
 
             <h2><a id="D10"></a>D10</h2>
+            <p><strong id="times">已擲骰次數:</strong> 0<br>
+            <strong id="mean">平均值:</strong> 0<br>
+            <strong id="max">擲出最大值次數:</strong> 0<br>
+            <strong id="min">擲出最小值次數:</strong> 0<br>
+            <strong id="last">最近三十次結果:</strong> </p>
+
+            <h2><a id="D12"></a>D12</h2>
             <p><strong id="times">已擲骰次數:</strong> 0<br>
             <strong id="mean">平均值:</strong> 0<br>
             <strong id="max">擲出最大值次數:</strong> 0<br>
