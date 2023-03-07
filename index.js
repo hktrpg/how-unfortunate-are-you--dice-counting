@@ -6,8 +6,21 @@ const specialDiceing = [{
     _formula: "1dt + 1d10",
     get: '_total'
 }]
+const cocDice = [{ dice: 10, real: 100 }, { dice: 20, real: 10 }, { dice: 30, real: 20 }, { dice: 40, real: 30 }, { dice: 50, real: 40 }, { dice: 60, real: 50 }, { dice: 70, real: 60 }, { dice: 80, real: 70 }, { dice: 90, real: 80 }, { dice: 100, real: 90 },]
+const banDiceing = [{
+    name: 'COC CCN1,2 ',
+    face: 100,
+    _formula: "1dt + 1dt + 1dt + 1d10",
+    get: '_total'
+},
+{
+    name: 'COC CCN1,2 ',
+    face: 100,
+    _formula: "1dt + 1dt + 1d10",
+    get: '_total'
+}]
 Hooks.once("ready", async () => {
-    console.log("How unfortunate are you? DiceCounting 1.0| Initializing");
+    console.log("How unfortunate are you? DiceCounting 1.1| Initializing");
     await DiceRoller.checkEntryExist();
 });
 
@@ -50,14 +63,24 @@ Hooks.once("ready", async () => {
  * results.results
  */
 
+Hooks.on('preUpdateChatMessage', (chatMessage, html) => {
+    if (html.content.indexOf('coc7-inline-check') == -1) return;
+    const recondUser = game.users.find(user => user.isGM && user.active);
+    if (!recondUser.isSelf) return;
+
+    try {
+        DiceRoller.main(chatMessage, html, 'preUpdateChatMessage');
+    } catch (error) {
+        console.error('error', error)
+    }
+});
 
 Hooks.on('createChatMessage', (chatMessage) => {
-    if ((!chatMessage.isRoll) ||
+    if ((!chatMessage.isRoll) &&
         //   (game.view != "stream" && (!game.dice3d || game.dice3d.messageHookDisabled)) ||
-        (chatMessage.getFlag("core", "RollTable"))) {
-        return;
-    }
-
+        (chatMessage.content.indexOf('inline-roll') == -1)
+        // (chatMessage.getFlag("core", "RollTable"))
+    ) return;
     //const premisson = game.settings.get('core', 'permissions').JOURNAL_CREATE;
     //const recondUser = game.users.find(user => (premisson.indexOf(user.role) > -1) && user.active);
     const recondUser = game.users.find(user => user.isGM && user.active);
@@ -83,13 +106,18 @@ class DiceRoller {
         //  this.updateHTML();
     }
 
-    static async main(message) {
+    static async main(message, html) {
         try {
-
             //1. get dice data
             let { dices, name } = DiceRoller.checkDice(message);
+            let banDice = DiceRoller.checkBanDice(message);
+            if (banDice) return;
             let specialDice = DiceRoller.checkSpecialDice(message);
             if (specialDice) dices = [specialDice];
+            let inlineDice = DiceRoller.checkInlineRoll(message);
+            if (inlineDice.length) dices = inlineDice;
+            let preMessage = (html) ? DiceRoller.checkPreMessage(html) : null;
+            if (preMessage) dices = [preMessage];
             if (!dices.length) return;
             //2. check Entry Exist 
             //if not exist, create new Entry
@@ -119,16 +147,65 @@ class DiceRoller {
         }
 
     }
+    static checkPreMessage(html) {
+        let JqInlineRolls = $($.parseHTML(`<div>${html.content}</div>`)).find(".coc7-inline-check.coc7-check-result");
+        let inlineRollList = {};
+        JqInlineRolls.each((index, el) => {
+            //We use the Roll class registered in the CONFIG constant in case the system overwrites it (eg: HeXXen)
+            let roll = JSON.parse(unescape(el.dataset.roll));
+            if (roll.dice?.roll?.formula === "1dt + 1d10") {
+                inlineRollList = {
+                    faces: 100,
+                    results: [{ result: roll.dice?.roll?.total }]
+                }
+                let change = cocDice.find(d => d.dice === inlineRollList.results[0].result)
+                if (change) inlineRollList.results[0].result = change.real;
+            }
+        });
+        return inlineRollList;
+    }
+    static checkInlineRoll(chatMessage) {
+        if (chatMessage.content.indexOf('inline-roll') == -1) return [];
+
+        let JqInlineRolls = $($.parseHTML(`<div>${chatMessage.content}</div>`)).find(".inline-roll.inline-result:not(.inline-dsn-hidden)");
+
+        let inlineRollList = [];
+        JqInlineRolls.each((index, el) => {
+            //We use the Roll class registered in the CONFIG constant in case the system overwrites it (eg: HeXXen)
+            let roll = CONFIG.Dice.rolls[0].fromJSON(unescape(el.dataset.roll));
+            roll.dice.forEach(diceterm => {
+
+                diceterm.results?.forEach(dice => {
+                    inlineRollList.push({
+                        faces: diceterm.faces,
+                        results: [{ result: dice.result }]
+                    })
+                });
+            });
+        });
+        return inlineRollList;
+    }
+    static checkBanDice(message) {
+        const rolls = message.rolls;
+        if (rolls.length === 0) return null;
+        const roll = rolls[0];
+        let banDice = banDiceing.find(d => d._formula === roll._formula);
+        if (banDice) return true;
+
+    }
     static checkSpecialDice(message) {
         const rolls = message.rolls;
         if (rolls.length === 0) return null;
         const roll = rolls[0];
         let specialDice = specialDiceing.find(d => d._formula === roll._formula);
         if (!specialDice) return null;
+
         let dice = {
             faces: specialDice.face,
             results: [{ result: roll.total }]
         };
+        let change = cocDice.find(d => d.dice === dice.results[0].result)
+        if (change) dice.results[0].result = change.real;
         return dice;
     }
 

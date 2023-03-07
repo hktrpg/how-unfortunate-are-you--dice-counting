@@ -14,6 +14,10 @@ Tiny module. Counting D4, D6, D8, D10, D12, D20, D100 roll result, like times, m
 3. The journal default permission is visible to everyone.
 4. Every time a dice is rolled, the roll data is stored according to the username.
 
+## v1.1.0
+
+Update CoC rolling
+
 ## v1.0.0
 
 Done.
