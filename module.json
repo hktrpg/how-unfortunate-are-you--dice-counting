@@ -1,38 +1,37 @@
 {
-    "id": "how-unfortunate-are-you--dice-counting",
-    "title": "How unfortunate are you? Dice Counting",
-    "description": "Tiny module. Counting D4, D6, D8, D10, D12, D20, D100 roll result, like times, mean.",
-    "version": "1.1.0",
-    "compatibility": {
-        "minimum": "10",
-        "verified": "10"
+  "id": "how-unfortunate-are-you--dice-counting",
+  "title": "How unfortunate are you? Dice Counting",
+  "description": "Tiny module. Counting D4, D6, D8, D10, D12, D20, D100 roll result, like times, mean.",
+  "version": "1.1.0",
+  "compatibility": {
+    "minimum": "10",
+    "verified": "10"
+  },
+  "authors": [
+    {
+      "name": "HKTRPG",
+      "discord": "zzz#8939",
+      "flags": {}
+    }
+  ],
+  "scripts": [
+    "index.js"
+  ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json",
+      "flags": {}
     },
-    "authors": [
-        {
-            "name": "HKTRPG",
-            "discord": "zzz#8939",
-            "flags": {}
-        }
-    ],
-    "esmodules": [],
-    "scripts": [
-        "index.js"
-    ],
-    "styles": [],
-    "packs": [],
-    "languages": [
-        {
-            "lang": "en",
-            "name": "English",
-            "path": "./lang/en.json"
-        },
-        {
-            "lang": "zh-tw",
-            "name": "正體中文",
-            "path": "./lang/zh-tw.json"
-        }
-    ],
-    "url": "https://github.com/hktrpg/how-unfortunate-are-you--dice-counting",
-    "manifest": "https://raw.githubusercontent.com/hktrpg/how-unfortunate-are-you--dice-counting/main/module.json",
-    "download": "https://github.com/hktrpg/how-unfortunate-are-you--dice-counting/releases/latest/download/module.zip"
+    {
+      "lang": "zh-tw",
+      "name": "正體中文",
+      "path": "lang/zh-tw.json",
+      "flags": {}
+    }
+  ],
+  "url": "https://github.com/hktrpg/how-unfortunate-are-you--dice-counting",
+  "manifest": "https://raw.githubusercontent.com/hktrpg/how-unfortunate-are-you--dice-counting/main/module.json",
+  "download": "https://github.com/hktrpg/how-unfortunate-are-you--dice-counting/releases/latest/download/module.zip"
 }
