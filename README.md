@@ -3,7 +3,7 @@
 ![Download](https://img.shields.io/github/downloads/hktrpg/How-unfortunate-are-you--Dice-Counting/total)
 <a href="https://patreon.com/HKTRPG"><img src="https://img.shields.io/endpoint.svg?url=https://shieldsio-patreon.vercel.app/api/?username=HKTRPG&type=patrons" /></a>
 
-Tiny module. Count rolling.
+Tiny module. Counting D4, D6, D8, D10, D12, D20, D100 roll result, like times, mean.
 
 ![readme](./demo.png)
 
