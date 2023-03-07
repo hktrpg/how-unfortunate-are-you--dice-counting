@@ -2,7 +2,7 @@ const entryName = "HKTRPG's Dice Counting";
 const diceCounting = ['D4', 'D6', 'D8', 'D10', 'D12', 'D20', 'D100'];
 const specialDiceing = [{
     name: 'COC D100',
-    dice: 'D100',
+    face: 100,
     _formula: "1dt + 1d10",
     get: '_total'
 }]
@@ -52,18 +52,15 @@ Hooks.once("ready", async () => {
 
 
 Hooks.on('createChatMessage', (chatMessage) => {
-    console.log('chatMessage', chatMessage)
     if ((!chatMessage.isRoll) ||
         //   (game.view != "stream" && (!game.dice3d || game.dice3d.messageHookDisabled)) ||
         (chatMessage.getFlag("core", "RollTable"))) {
         return;
     }
 
-    const premisson = game.settings.get('core', 'permissions').JOURNAL_CREATE;
-    const recondUser = game.users.find(user => (premisson.indexOf(user.role) > -1) && user.active);
-    console.log('recondUser', recondUser)
-    console.log('premisson', premisson)
-
+    //const premisson = game.settings.get('core', 'permissions').JOURNAL_CREATE;
+    //const recondUser = game.users.find(user => (premisson.indexOf(user.role) > -1) && user.active);
+    const recondUser = game.users.find(user => user.isGM && user.active);
     if (!recondUser.isSelf) return;
 
     try {
@@ -91,7 +88,6 @@ class DiceRoller {
 
             //1. get dice data
             let { dices, name } = DiceRoller.checkDice(message);
-            console.log('dices', dices)
             let specialDice = DiceRoller.checkSpecialDice(message);
             if (specialDice) dices = [specialDice];
             if (!dices.length) return;
@@ -130,7 +126,7 @@ class DiceRoller {
         let specialDice = specialDiceing.find(d => d._formula === roll._formula);
         if (!specialDice) return null;
         let dice = {
-            faces: 100,
+            faces: specialDice.face,
             results: [{ result: roll.total }]
         };
         return dice;
@@ -139,7 +135,6 @@ class DiceRoller {
     static checkDice(message) {
         let name = message.user.name;
         let dices = [];
-        console.log('message', message)
         const rolls = message.rolls;
         if (rolls.length === 0) return { dices, name };
         const roll = rolls[0];
@@ -148,7 +143,6 @@ class DiceRoller {
     }
 
     static readHtmlCode(string, name) {
-        console.log('string', string)
         // 創建一個空對象
         const result = { name: '', D4: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D6: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D8: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D10: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D12: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D20: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D100: { times: 0, mean: 0, max: 0, min: 0, last: [] } };
 
@@ -162,7 +156,6 @@ class DiceRoller {
 
         // 遍歷所有匹配的區塊
         for (const block of blocks) {
-            console.log('block', block)
             const id = block[1];
             const data = block[0];
             // 根據區塊 ID 創建對象屬性
@@ -175,32 +168,24 @@ class DiceRoller {
             // 正則表達式來匹配數據行
             const rowRegex = /<strong id="(.*)">.+?:<\/strong>\s*((?:\d?\.?\d?,?\s*)+)\s?(?:<br\s?\/?>|<\/p>)/g;
             const rows = data.matchAll(rowRegex);
-            console.log('rows', rows)
             // 遍歷所有匹配的數據行
             for (const row of rows) {
-                console.log('row', row)
                 const key = row[1].trim();
                 let value = row[2] !== '</p>' ? row[2].split(",").map((x) => x.trim()) : null;
                 if (key !== 'last') value = Number(value[0]);
                 result[key] = value;
             }
-            console.log('parseData result', result)
             // 如果對象中所有值都是空字符串，返回 null
             return Object.values(result).some((v) => v !== null && v !== "") ? result : null;
         }
-        console.log('OBJECT', Object.keys(result), result);
         return result;
     }
 
     static updateData(data, newData) {
         let allRoll = DiceRoller.__analysisData(newData);
-        console.log('updateData', data)
         for (let roll of allRoll) {
-            console.log('roll', roll)
             let key = `D${roll.face}`;
-            console.log(key, (diceCounting.indexOf(key) > -1))
             if (!(diceCounting.indexOf(key) > -1)) continue;
-            console.log('data[key]', key, data[key])
             data[key].times++;
             data[key].mean = (data[key].mean * (data[key].times - 1) + roll.result) / data[key].times;
             if (roll.result === roll.face) data[key].max++;
@@ -240,7 +225,6 @@ class DiceRoller {
                 `;
             }
         }
-        //console.log(html)
         return html;
 
     }
@@ -270,7 +254,7 @@ class DiceRoller {
     }
 
     static async __createNewEntry() {
-        await JournalEntry.create({ name: entryName });
+        await JournalEntry.create({ name: entryName, "ownership.default": 2 });
     }
 }
 

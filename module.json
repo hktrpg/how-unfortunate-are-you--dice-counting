@@ -1,7 +1,7 @@
 {
     "id": "how-unfortunate-are-you--dice-counting",
-    "title": "How unfortunate are you? DiceCounting",
-    "description": "Tiny module. Show online player first in Journal and Permission Control.",
+    "title": "How unfortunate are you? Dice Counting",
+    "description": "Tiny module. Counting Rolling, like mean, times.",
     "version": "1.0",
     "compatibility": {
         "minimum": "10",
