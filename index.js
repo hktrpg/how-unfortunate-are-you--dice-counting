@@ -1,10 +1,14 @@
 const entryName = "HKTRPG's Dice Counting";
 const diceCounting = ['D4', 'D6', 'D8', 'D10', 'D12', 'D20', 'D100'];
-let ready = false;
+const specialDiceing = [{
+    name: 'COC D100',
+    dice: 'D100',
+    _formula: "1dt + 1d10",
+    get: '_total'
+}]
 Hooks.once("ready", async () => {
     console.log("How unfortunate are you? DiceCounting 1.0| Initializing");
     await DiceRoller.checkEntryExist();
-    ready = true;
 });
 
 /**
@@ -49,12 +53,18 @@ Hooks.once("ready", async () => {
 
 Hooks.on('createChatMessage', (chatMessage) => {
     console.log('chatMessage', chatMessage)
-    if (!ready) return;
     if ((!chatMessage.isRoll) ||
         //   (game.view != "stream" && (!game.dice3d || game.dice3d.messageHookDisabled)) ||
         (chatMessage.getFlag("core", "RollTable"))) {
         return;
     }
+
+    const premisson = game.settings.get('core', 'permissions').JOURNAL_CREATE;
+    const recondUser = game.users.find(user => (premisson.indexOf(user.role) > -1) && user.active);
+    console.log('recondUser', recondUser)
+    console.log('premisson', premisson)
+
+    if (!recondUser.isSelf) return;
 
     try {
         DiceRoller.main(chatMessage);
@@ -79,9 +89,11 @@ class DiceRoller {
     static async main(message) {
         try {
 
-
             //1. get dice data
             let { dices, name } = DiceRoller.checkDice(message);
+            console.log('dices', dices)
+            let specialDice = DiceRoller.checkSpecialDice(message);
+            if (specialDice) dices = [specialDice];
             if (!dices.length) return;
             //2. check Entry Exist 
             //if not exist, create new Entry
@@ -96,7 +108,7 @@ class DiceRoller {
             console.debug('page', page)
             //4. get Page Data
             let contect = page?.text?.content || page[0].text.content;
-            let data = DiceRoller.readHtmlCode(contect);
+            let data = DiceRoller.readHtmlCode(contect, name);
             //5. update Page Data
             let newData = await DiceRoller.updateData(data, dices);
 
@@ -111,6 +123,19 @@ class DiceRoller {
         }
 
     }
+    static checkSpecialDice(message) {
+        const rolls = message.rolls;
+        if (rolls.length === 0) return null;
+        const roll = rolls[0];
+        let specialDice = specialDiceing.find(d => d._formula === roll._formula);
+        if (!specialDice) return null;
+        let dice = {
+            faces: 100,
+            results: [{ result: roll.total }]
+        };
+        return dice;
+    }
+
     static checkDice(message) {
         let name = message.user.name;
         let dices = [];
@@ -122,14 +147,14 @@ class DiceRoller {
         return { dices, name };
     }
 
-    static readHtmlCode(string) {
+    static readHtmlCode(string, name) {
         console.log('string', string)
         // 創建一個空對象
         const result = { name: '', D4: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D6: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D8: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D10: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D12: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D20: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D100: { times: 0, mean: 0, max: 0, min: 0, last: [] } };
 
         // 正則表達式來匹配名稱
-        const nameRegex = /<h1><strong>(.*?)<\/strong>.*<\/h1>/s;
-        result.name = string.match(nameRegex)[1].trim();
+        //const nameRegex = /<h1><strong>(.*?)<\/strong>.*<\/h1>/s;
+        result.name = name;
 
         // 正則表達式來匹配 D6 和 D10 的區塊
         const blockRegex = /<h2.*?id="(.*?)".*?<\/p>/sg;
@@ -201,7 +226,7 @@ class DiceRoller {
         return allRoll;
     }
     static renderHtmlCode(data) {
-        let html = `<h1><strong>${data.name}</strong></h1>
+        let html = `<h1><strong>${game.i18n.localize("name")}</strong></h1>
     `;
         for (let key in data) {
             if (key !== 'name') {
@@ -264,7 +289,7 @@ class DiceRoller {
 
 
 
-const htmlText = `<h1><strong>某人</strong></h1>
+const htmlText = `<h1><strong>擲骰紀錄</strong></h1>
             <h2><a id="D4"></a>D4</h2>
             <p><strong id="times">已擲骰次數:</strong> 0<br>
             <strong id="mean">平均值:</strong> 0<br>
