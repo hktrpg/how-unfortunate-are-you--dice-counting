@@ -16,7 +16,7 @@ Tiny module. Counting D4, D6, D8, D10, D12, D20, D100 roll result, like times, m
 
 ## v1.1.0
 
-Update CoC rolling
+Support CoC7ed rolling
 
 ## v1.0.0
 
