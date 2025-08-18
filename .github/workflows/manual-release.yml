@@ -1,0 +1,58 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (leave empty to use module.json version)'
+        required: false
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Extract version from module.json
+      id: version
+      run: |
+        if [ -n "${{ github.event.inputs.version }}" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=$(node -p "require('./module.json').version")
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Using version: $VERSION"
+        
+    - name: Create module.zip
+      run: |
+        # Create zip file with all necessary files
+        zip -r module.zip . -x "*.git*" "*.github*" "node_modules/*" "*.zip"
+        echo "Created module.zip"
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        name: Release v${{ steps.version.outputs.version }}
+        body: |
+          ## How unfortunate are you? Dice Counting v${{ steps.version.outputs.version }}
+          
+          ### Changes
+          - Manual release
+          
+          ### Installation
+          Download the `module.zip` file and install it in your Foundry VTT modules directory.
+        files: module.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
