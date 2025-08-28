@@ -64,7 +64,7 @@ Hooks.once("ready", async () => {
  */
 
 Hooks.on('preUpdateChatMessage', (chatMessage, html) => {
-    if (html.content.indexOf('coc7-inline-check') == -1) return;
+    if (!html || !html.content || html.content.indexOf('coc7-inline-check') == -1) return;
     const recondUser = game.users.find(user => user.isGM && user.active);
     if (!recondUser.isSelf) return;
 
@@ -78,7 +78,7 @@ Hooks.on('preUpdateChatMessage', (chatMessage, html) => {
 Hooks.on('createChatMessage', (chatMessage) => {
     if ((!chatMessage.isRoll) &&
         //   (game.view != "stream" && (!game.dice3d || game.dice3d.messageHookDisabled)) ||
-        (chatMessage.content.indexOf('inline-roll') == -1)
+        (!chatMessage.content || chatMessage.content.indexOf('inline-roll') == -1)
         // (chatMessage.getFlag("core", "RollTable"))
     ) return;
     //const premisson = game.settings.get('core', 'permissions').JOURNAL_CREATE;
@@ -108,6 +108,9 @@ class DiceRoller {
 
     static async main(message, html) {
         try {
+            // Validate input
+            if (!message) return;
+
             //1. get dice data
             let { dices, name } = DiceRoller.checkDice(message);
             let banDice = DiceRoller.checkBanDice(message);
@@ -148,24 +151,30 @@ class DiceRoller {
 
     }
     static checkPreMessage(html) {
+        if (!html || !html.content) return null;
+
         let JqInlineRolls = $($.parseHTML(`<div>${html.content}</div>`)).find(".coc7-inline-check.coc7-check-result");
         let inlineRollList = {};
         JqInlineRolls.each((index, el) => {
             //We use the Roll class registered in the CONFIG constant in case the system overwrites it (eg: HeXXen)
-            let roll = JSON.parse(unescape(el.dataset.roll));
-            if (roll.dice?.roll?.formula === "1dt + 1d10") {
-                inlineRollList = {
-                    faces: 100,
-                    results: [{ result: roll.dice?.roll?.total }]
+            try {
+                let roll = JSON.parse(unescape(el.dataset.roll));
+                if (roll.dice?.roll?.formula === "1dt + 1d10") {
+                    inlineRollList = {
+                        faces: 100,
+                        results: [{ result: roll.dice?.roll?.total || 0 }]
+                    }
+                    let change = cocDice.find(d => d.dice === inlineRollList.results[0].result)
+                    if (change) inlineRollList.results[0].result = change.real;
                 }
-                let change = cocDice.find(d => d.dice === inlineRollList.results[0].result)
-                if (change) inlineRollList.results[0].result = change.real;
+            } catch (error) {
+                console.warn('Error parsing roll data in checkPreMessage:', error);
             }
         });
         return inlineRollList;
     }
     static checkInlineRoll(chatMessage) {
-        if (chatMessage.content.indexOf('inline-roll') == -1) return [];
+        if (!chatMessage.content || chatMessage.content.indexOf('inline-roll') == -1) return [];
 
         let JqInlineRolls = $($.parseHTML(`<div>${chatMessage.content}</div>`)).find(".inline-roll.inline-result:not(.inline-dsn-hidden)");
 
@@ -186,23 +195,25 @@ class DiceRoller {
         return inlineRollList;
     }
     static checkBanDice(message) {
-        const rolls = message.rolls;
+        const rolls = message.rolls || [];
         if (rolls.length === 0) return null;
         const roll = rolls[0];
+        if (!roll || !roll._formula) return null;
         let banDice = banDiceing.find(d => d._formula === roll._formula);
         if (banDice) return true;
-
+        return null;
     }
     static checkSpecialDice(message) {
-        const rolls = message.rolls;
+        const rolls = message.rolls || [];
         if (rolls.length === 0) return null;
         const roll = rolls[0];
+        if (!roll || !roll._formula) return null;
         let specialDice = specialDiceing.find(d => d._formula === roll._formula);
         if (!specialDice) return null;
 
         let dice = {
             faces: specialDice.face,
-            results: [{ result: roll.total }]
+            results: [{ result: roll.total || 0 }]
         };
         let change = cocDice.find(d => d.dice === dice.results[0].result)
         if (change) dice.results[0].result = change.real;
@@ -210,12 +221,12 @@ class DiceRoller {
     }
 
     static checkDice(message) {
-        let name = message.user.name;
+        let name = message.user?.name || 'Unknown';
         let dices = [];
-        const rolls = message.rolls;
+        const rolls = message.rolls || [];
         if (rolls.length === 0) return { dices, name };
         const roll = rolls[0];
-        dices = roll.dice;
+        dices = roll.dice || [];
         return { dices, name };
     }
 
@@ -401,19 +412,3 @@ const htmlText = `<h1><strong>擲骰紀錄</strong></h1>
             <strong id="last">最近三十次結果:</strong> </p>
 
 `
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
