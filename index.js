@@ -1,414 +1,226 @@
-const entryName = "HKTRPG's Dice Counting";
-const diceCounting = ['D4', 'D6', 'D8', 'D10', 'D12', 'D20', 'D100'];
-const specialDiceing = [{
-    name: 'COC D100',
-    face: 100,
-    _formula: "1dt + 1d10",
-    get: '_total'
-}]
-const cocDice = [{ dice: 10, real: 100 }, { dice: 20, real: 10 }, { dice: 30, real: 20 }, { dice: 40, real: 30 }, { dice: 50, real: 40 }, { dice: 60, real: 50 }, { dice: 70, real: 60 }, { dice: 80, real: 70 }, { dice: 90, real: 80 }, { dice: 100, real: 90 },]
-const banDiceing = [{
-    name: 'COC CCN1,2 ',
-    face: 100,
-    _formula: "1dt + 1dt + 1dt + 1d10",
-    get: '_total'
-},
-{
-    name: 'COC CCN1,2 ',
-    face: 100,
-    _formula: "1dt + 1dt + 1d10",
-    get: '_total'
-}]
-Hooks.once("ready", async () => {
-    console.log("How unfortunate are you? DiceCounting 1.1| Initializing");
-    await DiceRoller.checkEntryExist();
-});
+/**
+ * Constants for the module
+ */
+const MODULE_ID = "how-unfortunate-are-you--dice-counting";
+const SETTING_KEY = "rollStats";
+const JOURNAL_NAME = "HKTRPG's Dice Counting"; // Must match your old Journal Name exactly
 
 /**
- * https://foundryvtt.wiki/en/development/api/settings
- * 
- * => Create Folder in Journal
- * 
- * 
- * 
- * renderChatMessage 
- * [0]
- * rolls
- * [0]
- * _formula = "1dt + 1d10"
- * total = XX    !!!!
- * 
- * 
- * +1   ->  "1dt + 1dt + 1d10"
- * +2   -> 1dt + 1dt + 1dt + 1d10
- * 
- * 
- * "1dt + 1dt + 1dt + 1d10"
- * 
- * 
- * _formula ="1d100"
- * total: 53
- * 
- * 
- * _formula ="1d20"
- * total
- * 
- * 
- * 
- * rolls
- * [0]
- * dice []
- * faces ==20 
- * 
- * results.results
+ * Default Data Structure
  */
+const DEFAULT_STATS = {
+    D4: { times: 0, sum: 0, max: 0, min: 0, last: [] },
+    D6: { times: 0, sum: 0, max: 0, min: 0, last: [] },
+    D8: { times: 0, sum: 0, max: 0, min: 0, last: [] },
+    D10: { times: 0, sum: 0, max: 0, min: 0, last: [] },
+    D12: { times: 0, sum: 0, max: 0, min: 0, last: [] },
+    D20: { times: 0, sum: 0, max: 0, min: 0, last: [] },
+    D100: { times: 0, sum: 0, max: 0, min: 0, last: [] }
+};
 
-Hooks.on('preUpdateChatMessage', (chatMessage, html) => {
-    if (!html || !html.content || html.content.indexOf('coc7-inline-check') == -1) return;
-    const recondUser = game.users.find(user => user.isGM && user.active);
-    if (!recondUser.isSelf) return;
-
-    try {
-        DiceRoller.main(chatMessage, html, 'preUpdateChatMessage');
-    } catch (error) {
-        console.error('error', error)
-    }
+Hooks.once("init", () => {
+    // Register the setting to store data
+    game.settings.register(MODULE_ID, SETTING_KEY, {
+        name: "Dice Stats",
+        scope: "world",
+        config: false,
+        type: Object,
+        default: DEFAULT_STATS
+    });
 });
 
-Hooks.on('createChatMessage', (chatMessage) => {
-    if ((!chatMessage.isRoll) &&
-        //   (game.view != "stream" && (!game.dice3d || game.dice3d.messageHookDisabled)) ||
-        (!chatMessage.content || chatMessage.content.indexOf('inline-roll') == -1)
-        // (chatMessage.getFlag("core", "RollTable"))
-    ) return;
-    //const premisson = game.settings.get('core', 'permissions').JOURNAL_CREATE;
-    //const recondUser = game.users.find(user => (premisson.indexOf(user.role) > -1) && user.active);
-    const recondUser = game.users.find(user => user.isGM && user.active);
-    if (!recondUser.isSelf) return;
+Hooks.once("ready", async () => {
+    console.log(`${MODULE_ID} | Initializing`);
+    
+    // 1. Check/Create Journal
+    await DiceStatsManager.ensureJournalExists();
 
-    try {
-        DiceRoller.main(chatMessage);
-    } catch (error) {
-        console.error('error', error)
-    }
+    // 2. Attempt Migration (If old HTML exists but Settings are empty)
+    await DiceStatsManager.migrate();
 });
 
+Hooks.on("createChatMessage", (message) => {
+    if (!message.isRoll || !game.users.activeGM?.isSelf) return;
+    DiceStatsManager.processRoll(message);
+});
 
-//diceSoNiceRollStart(X, Y)
-//Y.roll.dice
+class DiceStatsManager {
+    
+    // =========================================================
+    //  MIGRATION LOGIC
+    // =========================================================
 
+    static async migrate() {
+        // Get current settings
+        const currentSettings = game.settings.get(MODULE_ID, SETTING_KEY);
 
+        // Check if settings are "empty" (all times == 0)
+        const isSettingsEmpty = Object.values(currentSettings).every(d => d.times === 0);
+        
+        if (!isSettingsEmpty) return; // Data already exists, no need to migrate.
 
-class DiceRoller {
-    constructor() {
-        // this.diceResults = {}; // 存放每種骰子的統計數據
-        // this.loadDiceResults();
-        //  this.updateHTML();
-    }
+        const journal = game.journal.getName(JOURNAL_NAME);
+        if (!journal) return; // No old journal to migrate from.
 
-    static async main(message, html) {
-        try {
-            // Validate input
-            if (!message) return;
+        console.log(`${MODULE_ID} | Detecting old data... attempting migration.`);
+        
+        // Get the content from the first page
+        const page = journal.pages.contents[0];
+        const htmlContent = page?.text?.content;
 
-            //1. get dice data
-            let { dices, name } = DiceRoller.checkDice(message);
-            let banDice = DiceRoller.checkBanDice(message);
-            if (banDice) return;
-            let specialDice = DiceRoller.checkSpecialDice(message);
-            if (specialDice) dices = [specialDice];
-            let inlineDice = DiceRoller.checkInlineRoll(message);
-            if (inlineDice.length) dices = inlineDice;
-            let preMessage = (html) ? DiceRoller.checkPreMessage(html) : null;
-            if (preMessage) dices = [preMessage];
-            if (!dices.length) return;
-            //2. check Entry Exist 
-            //if not exist, create new Entry
-            await DiceRoller.checkEntryExist();
+        if (!htmlContent) return;
 
-            //3. check Page Exist
-            let { target, page } = await DiceRoller.checkPageExist(name);
-            if (!page) {
-                //if not exist, create new Page
-                page = await DiceRoller.__createNewPage(target, name, htmlText);
-            }
-            console.debug('page', page)
-            //4. get Page Data
-            let contect = page?.text?.content || page[0].text.content;
-            let data = DiceRoller.readHtmlCode(contect, name);
-            //5. update Page Data
-            let newData = await DiceRoller.updateData(data, dices);
+        // Parse the old HTML
+        const oldData = this.parseOldHtml(htmlContent);
 
-            //5.1 render new html code
-            let newHtmlText = DiceRoller.renderHtmlCode(newData);
+        if (oldData) {
+            // Merge old data into the new structure
+            // Note: Old data stored 'mean', we need 'sum' for the new logic.
+            // Approximation: sum = mean * times
+            const newStats = foundry.utils.deepClone(DEFAULT_STATS);
 
-            //6. update Page
-            await DiceRoller.__updatePage(target, newHtmlText, page);
-        } catch (error) {
-            console.error('error', error)
-            return;
-        }
-
-    }
-    static checkPreMessage(html) {
-        if (!html || !html.content) return null;
-
-        let JqInlineRolls = $($.parseHTML(`<div>${html.content}</div>`)).find(".coc7-inline-check.coc7-check-result");
-        let inlineRollList = {};
-        JqInlineRolls.each((index, el) => {
-            //We use the Roll class registered in the CONFIG constant in case the system overwrites it (eg: HeXXen)
-            try {
-                let roll = JSON.parse(unescape(el.dataset.roll));
-                if (roll.dice?.roll?.formula === "1dt + 1d10") {
-                    inlineRollList = {
-                        faces: 100,
-                        results: [{ result: roll.dice?.roll?.total || 0 }]
-                    }
-                    let change = cocDice.find(d => d.dice === inlineRollList.results[0].result)
-                    if (change) inlineRollList.results[0].result = change.real;
+            for (const [key, stat] of Object.entries(oldData)) {
+                if (newStats[key]) {
+                    newStats[key].times = stat.times || 0;
+                    newStats[key].max = stat.max || 0;
+                    newStats[key].min = stat.min || 0;
+                    newStats[key].last = stat.last || [];
+                    
+                    // Reverse calculate Sum from Mean to maintain accuracy
+                    newStats[key].sum = (stat.mean || 0) * (stat.times || 0);
                 }
-            } catch (error) {
-                console.warn('Error parsing roll data in checkPreMessage:', error);
             }
-        });
-        return inlineRollList;
-    }
-    static checkInlineRoll(chatMessage) {
-        if (!chatMessage.content || chatMessage.content.indexOf('inline-roll') == -1) return [];
 
-        let JqInlineRolls = $($.parseHTML(`<div>${chatMessage.content}</div>`)).find(".inline-roll.inline-result:not(.inline-dsn-hidden)");
-
-        let inlineRollList = [];
-        JqInlineRolls.each((index, el) => {
-            //We use the Roll class registered in the CONFIG constant in case the system overwrites it (eg: HeXXen)
-            let roll = CONFIG.Dice.rolls[0].fromJSON(unescape(el.dataset.roll));
-            roll.dice.forEach(diceterm => {
-
-                diceterm.results?.forEach(dice => {
-                    inlineRollList.push({
-                        faces: diceterm.faces,
-                        results: [{ result: dice.result }]
-                    })
-                });
-            });
-        });
-        return inlineRollList;
-    }
-    static checkBanDice(message) {
-        const rolls = message.rolls || [];
-        if (rolls.length === 0) return null;
-        const roll = rolls[0];
-        if (!roll || !roll._formula) return null;
-        let banDice = banDiceing.find(d => d._formula === roll._formula);
-        if (banDice) return true;
-        return null;
-    }
-    static checkSpecialDice(message) {
-        const rolls = message.rolls || [];
-        if (rolls.length === 0) return null;
-        const roll = rolls[0];
-        if (!roll || !roll._formula) return null;
-        let specialDice = specialDiceing.find(d => d._formula === roll._formula);
-        if (!specialDice) return null;
-
-        let dice = {
-            faces: specialDice.face,
-            results: [{ result: roll.total || 0 }]
-        };
-        let change = cocDice.find(d => d.dice === dice.results[0].result)
-        if (change) dice.results[0].result = change.real;
-        return dice;
+            // Save to Settings
+            await game.settings.set(MODULE_ID, SETTING_KEY, newStats);
+            console.log(`${MODULE_ID} | Migration Successful!`);
+            
+            // Re-render the journal in the new format immediately
+            await this.renderJournal(newStats);
+        }
     }
 
-    static checkDice(message) {
-        let name = message.user?.name || 'Unknown';
-        let dices = [];
-        const rolls = message.rolls || [];
-        if (rolls.length === 0) return { dices, name };
-        const roll = rolls[0];
-        dices = roll.dice || [];
-        return { dices, name };
-    }
-
-    static readHtmlCode(string, name) {
-        // 創建一個空對象
-        const result = { name: '', D4: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D6: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D8: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D10: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D12: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D20: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D100: { times: 0, mean: 0, max: 0, min: 0, last: [] } };
-
-        // 正則表達式來匹配名稱
-        //const nameRegex = /<h1><strong>(.*?)<\/strong>.*<\/h1>/s;
-        result.name = name;
-
-        // 正則表達式來匹配 D6 和 D10 的區塊
+    /**
+     * Adapted from your original 'readHtmlCode' in index.js
+     * Parses the HTML string to extract data.
+     */
+    static parseOldHtml(htmlString) {
+        const result = {};
+        
+        // Regex to find blocks: <h2><a id="D6"></a>D6</h2> ... content ...
         const blockRegex = /<h2.*?id="(.*?)".*?<\/p>/sg;
-        const blocks = string.matchAll(blockRegex);
+        const blocks = htmlString.matchAll(blockRegex);
 
-        // 遍歷所有匹配的區塊
         for (const block of blocks) {
-            const id = block[1];
-            const data = block[0];
-            // 根據區塊 ID 創建對象屬性
-            result[id] = parseData(data);
-
+            const id = block[1]; // e.g., "D6"
+            const content = block[0];
+            result[id] = this._parseBlockData(content);
         }
-        // 解析區塊內容並返回對象
-        function parseData(data) {
-            const result = {};
-            // 正則表達式來匹配數據行
-            const rowRegex = /<strong id="(.*)">.+?:<\/strong>\s*((?:\d?\.?\d?,?\s*)+)\s?(?:<br\s?\/?>|<\/p>)/g;
-            const rows = data.matchAll(rowRegex);
-            // 遍歷所有匹配的數據行
-            for (const row of rows) {
-                const key = row[1].trim();
-                let value = row[2] !== '</p>' ? row[2].split(",").map((x) => x.trim()) : null;
-                if (key !== 'last') value = Number(value[0]);
-                result[key] = value;
-            }
-            // 如果對象中所有值都是空字符串，返回 null
-            return Object.values(result).some((v) => v !== null && v !== "") ? result : null;
-        }
-        return result;
+        
+        return Object.keys(result).length > 0 ? result : null;
     }
 
-    static updateData(data, newData) {
-        let allRoll = DiceRoller.__analysisData(newData);
-        for (let roll of allRoll) {
-            let key = `D${roll.face}`;
-            if (!(diceCounting.indexOf(key) > -1)) continue;
-            data[key].times++;
-            data[key].mean = (data[key].mean * (data[key].times - 1) + roll.result) / data[key].times;
-            if (roll.result === roll.face) data[key].max++;
-            if (roll.result === 1) data[key].min++;
-            data[key].last.push(roll.result);
-            if (data[key].last.length > 30) data[key].last.shift();
-            if (data[key].last[0] === '' && data[key].last.length > 1) data[key].last.shift();
+    static _parseBlockData(content) {
+        const data = {};
+        // Regex to find rows: <strong id="times">...:</strong> 123<br>
+        const rowRegex = /<strong id="(.*)">.+?:<\/strong>\s*((?:\d?\.?\d?,?\s*)+)\s?(?:<br\s?\/?>|<\/p>)/g;
+        const rows = content.matchAll(rowRegex);
+
+        for (const row of rows) {
+            const key = row[1].trim(); // times, mean, etc.
+            let value = row[2];
+
+            if (key === 'last') {
+                // Convert "1, 2, 3" string to array
+                value = value.includes(',') ? value.split(",").map(x => Number(x.trim())).filter(n => !isNaN(n)) : [];
+            } else {
+                value = Number(value);
+            }
+            data[key] = value;
         }
         return data;
-
     }
-    static __analysisData(fvttData) {
-        let allRoll = [];
-        for (let roll of fvttData) {
-            for (let result of roll.results) {
-                let dice = {
-                    face: roll.faces,
-                    result: result.result
+
+    // =========================================================
+    //  CORE LOGIC
+    // =========================================================
+
+    static async processRoll(message) {
+        const currentStats = foundry.utils.deepClone(game.settings.get(MODULE_ID, SETTING_KEY));
+        let changed = false;
+
+        for (const term of message.rolls[0].terms) {
+            if (term instanceof Die || term.class === "Die") {
+                const key = `D${term.faces}`;
+                if (currentStats[key]) {
+                    for (const result of term.results) {
+                        if (!result.active) continue;
+                        this._updateStatEntry(currentStats[key], term.faces, result.result);
+                        changed = true;
+                    }
                 }
-                allRoll.push(dice);
             }
         }
-        return allRoll;
-    }
-    static renderHtmlCode(data) {
-        let html = `<h1><strong>${game.i18n.localize("name")}</strong></h1>
-    `;
-        for (let key in data) {
-            if (key !== 'name') {
-                html += `<h2><a id="${key}"></a>${key}</h2>
-                <p><strong id="times">${game.i18n.localize("times")}:</strong> ${data[key].times}<br>
-                <strong id="mean">${game.i18n.localize("mean")}:</strong> ${data[key].mean}<br>
-                <strong id="max">${game.i18n.localize("max")}:</strong> ${data[key].max}<br>
-                <strong id="min">${game.i18n.localize("min")}:</strong> ${data[key].min}<br>
-                <strong id="last">${game.i18n.localize("last")}:</strong> ${data[key].last.join(', ')}</p>
-                
-                `;
-            }
-        }
-        return html;
 
-    }
-
-    static async checkEntryExist() {
-        let target = game.journal.find(v => v.name == entryName)
-        if (!target) {
-            await DiceRoller.__createNewEntry();
+        if (changed) {
+            await game.settings.set(MODULE_ID, SETTING_KEY, currentStats);
+            await this.renderJournal(currentStats);
         }
     }
 
-    static async checkPageExist(name) {
-        const target = game.journal.find(v => v.name == entryName)
-        const page = target.pages.find(v => v.name == name)
-        return { target, page };
+    static _updateStatEntry(data, faces, result) {
+        data.times++;
+        data.sum += result;
+        if (result === faces) data.max++;
+        if (result === 1) data.min++;
+        data.last.push(result);
+        if (data.last.length > 30) data.last.shift();
     }
 
-    static async __updatePage(target, content, page) {
-        const _id = page?._id || page[0]._id;
-        const newPage = { "text.content": content, _id };
-        await target.updateEmbeddedDocuments("JournalEntryPage", [newPage]);
+    static async renderJournal(stats) {
+        const entry = game.journal.getName(JOURNAL_NAME);
+        if (!entry) return;
+
+        let content = `<h1><strong>${game.i18n.localize("name")}</strong></h1>`;
+
+        for (const [key, data] of Object.entries(stats)) {
+            const mean = data.times > 0 ? (data.sum / data.times).toFixed(2) : 0;
+            // Join array for display
+            const lastStr = data.last.join(', ');
+
+            content += `
+            <h2><a id="${key}"></a>${key}</h2>
+            <p>
+                <strong id="times">${game.i18n.localize("times")}:</strong> ${data.times}<br>
+                <strong id="mean">${game.i18n.localize("mean")}:</strong> ${mean}<br>
+                <strong id="max">${game.i18n.localize("max")}:</strong> ${data.max}<br>
+                <strong id="min">${game.i18n.localize("min")}:</strong> ${data.min}<br>
+                <strong id="last">${game.i18n.localize("last")}:</strong> ${lastStr}
+            </p>
+            <hr>`;
+        }
+
+        const page = entry.pages.contents[0];
+        if (page) {
+            await page.update({ "text.content": content });
+        }
     }
 
-    static async __createNewPage(target, name, content) {
-        let newPage = { "name": name, "text.content": content.replace('某人', name) };
-        return await target.createEmbeddedDocuments("JournalEntryPage", [newPage])
-    }
-
-    static async __createNewEntry() {
-        await JournalEntry.create({ name: entryName, "ownership.default": 2 });
+    static async ensureJournalExists() {
+        let entry = game.journal.getName(JOURNAL_NAME);
+        if (!entry) {
+            // Create Journal with specific permissions
+            entry = await JournalEntry.create({ 
+                name: JOURNAL_NAME,
+                ownership: { 
+                    default: 2 // OBSERVER (Visible to all players)
+                } 
+            });
+            await entry.createEmbeddedDocuments("JournalEntryPage", [{
+                name: "Statistics",
+                type: "text",
+                text: { content: "Initializing..." }
+            }]);
+        }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-const htmlText = `<h1><strong>擲骰紀錄</strong></h1>
-            <h2><a id="D4"></a>D4</h2>
-            <p><strong id="times">已擲骰次數:</strong> 0<br>
-            <strong id="mean">平均值:</strong> 0<br>
-            <strong id="max">擲出最大值次數:</strong> 0<br>
-            <strong id="min">擲出最小值次數:</strong> 0<br>
-            <strong id="last">最近三十次結果:</strong> </p>
-
-            <h2><a id="D6"></a>D6</h2>
-            <p><strong id="times">已擲骰次數:</strong> 0<br>
-            <strong id="mean">平均值:</strong> 0<br>
-            <strong id="max">擲出最大值次數:</strong> 0<br>
-            <strong id="min">擲出最小值次數:</strong> 0<br>
-            <strong id="last">最近三十次結果:</strong> </p>
-
-            <h2><a id="D8"></a>D8</h2>
-            <p><strong id="times">已擲骰次數:</strong> 0<br>
-            <strong id="mean">平均值:</strong> 0<br>
-            <strong id="max">擲出最大值次數:</strong> 0<br>
-            <strong id="min">擲出最小值次數:</strong> 0<br>
-            <strong id="last">最近三十次結果:</strong> </p>
-
-            <h2><a id="D10"></a>D10</h2>
-            <p><strong id="times">已擲骰次數:</strong> 0<br>
-            <strong id="mean">平均值:</strong> 0<br>
-            <strong id="max">擲出最大值次數:</strong> 0<br>
-            <strong id="min">擲出最小值次數:</strong> 0<br>
-            <strong id="last">最近三十次結果:</strong> </p>
-
-            <h2><a id="D12"></a>D12</h2>
-            <p><strong id="times">已擲骰次數:</strong> 0<br>
-            <strong id="mean">平均值:</strong> 0<br>
-            <strong id="max">擲出最大值次數:</strong> 0<br>
-            <strong id="min">擲出最小值次數:</strong> 0<br>
-            <strong id="last">最近三十次結果:</strong> </p>
-
-            <h2><a id="D20"></a>D20</h2>
-            <p><strong id="times">已擲骰次數:</strong> 0<br>
-            <strong id="mean">平均值:</strong> 0<br>
-            <strong id="max">擲出最大值次數:</strong> 0<br>
-            <strong id="min">擲出最小值次數:</strong> 0<br>
-            <strong id="last">最近三十次結果:</strong> </p>
-
-            <h2><a id="D100"></a>D100</h2>
-            <p><strong id="times">已擲骰次數:</strong> 0<br>
-            <strong id="mean">平均值:</strong> 0<br>
-            <strong id="max">擲出最大值次數:</strong> 0<br>
-            <strong id="min">擲出最小值次數:</strong> 0<br>
-            <strong id="last">最近三十次結果:</strong> </p>
-
-`
