@@ -303,21 +303,13 @@ class DiceRoller {
     `;
         for (let key in data) {
             if (key !== 'name') {
-                // 確保 data[key] 存在且有預設值
-                if (!data[key]) {
-                    data[key] = { times: 0, mean: 0, max: 0, min: 0, last: [] };
-                }
-                // 確保 last 屬性存在
-                if (!data[key].last) {
-                    data[key].last = [];
-                }
                 html += `<h2><a id="${key}"></a>${key}</h2>
                 <p><strong id="times">${game.i18n.localize("times")}:</strong> ${data[key].times}<br>
                 <strong id="mean">${game.i18n.localize("mean")}:</strong> ${data[key].mean}<br>
                 <strong id="max">${game.i18n.localize("max")}:</strong> ${data[key].max}<br>
                 <strong id="min">${game.i18n.localize("min")}:</strong> ${data[key].min}<br>
                 <strong id="last">${game.i18n.localize("last")}:</strong> ${data[key].last.join(', ')}</p>
-
+                
                 `;
             }
         }
