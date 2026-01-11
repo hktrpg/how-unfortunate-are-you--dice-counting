@@ -221,7 +221,7 @@ class DiceRoller {
     }
 
     static checkDice(message) {
-        let name = message.user?.name || 'Unknown';
+        let name = message.author?.name || message.user?.name || 'Unknown';
         let dices = [];
         const rolls = message.rolls || [];
         if (rolls.length === 0) return { dices, name };
@@ -238,33 +238,68 @@ class DiceRoller {
         //const nameRegex = /<h1><strong>(.*?)<\/strong>.*<\/h1>/s;
         result.name = name;
 
-        // 正則表達式來匹配 D6 和 D10 的區塊
-        const blockRegex = /<h2.*?id="(.*?)".*?<\/p>/sg;
-        const blocks = string.matchAll(blockRegex);
+        // 正則表達式來匹配骰子區塊
+        const blockRegex = /<h2[^>]*>(.*?)<\/h2>\s*<p>(.*?)<\/p>/sg;
+        const blocks = [...string.matchAll(blockRegex)];
 
         // 遍歷所有匹配的區塊
         for (const block of blocks) {
-            const id = block[1];
-            const data = block[0];
-            // 根據區塊 ID 創建對象屬性
-            result[id] = parseData(data);
+            const h2Content = block[1];
+            const pContent = block[2];
+
+            // 從 h2 內容中提取骰子類型 (如 D4, D6 等)
+            const diceTypeMatch = h2Content.match(/D\d+/);
+            const diceType = diceTypeMatch ? diceTypeMatch[0] : h2Content.trim();
+
+            // 解析 p 標籤內容
+            const parsedData = parseData(`<p>${pContent}</p>`);
+            if (parsedData) {
+                // 合併解析的數據到默認對象，保留 last 數組
+                result[diceType] = { ...result[diceType], ...parsedData };
+            }
 
         }
         // 解析區塊內容並返回對象
         function parseData(data) {
             const result = {};
+
             // 正則表達式來匹配數據行
-            const rowRegex = /<strong id="(.*)">.+?:<\/strong>\s*((?:\d?\.?\d?,?\s*)+)\s?(?:<br\s?\/?>|<\/p>)/g;
-            const rows = data.matchAll(rowRegex);
+            const rowRegex = /<strong id="([^"]+)">([^<]*):<\/strong>\s*([^<]+?)\s*(?:<br\s*\/?>|<\/p>|$)/g;
+            const rows = [...data.matchAll(rowRegex)];
+
+            // 如果沒有匹配到足夠的字段，嘗試另一個正則表達式
+            let finalRows = rows;
+            if (rows.length < 5) {
+                const altRegex = /<strong id="([^"]+)">([^<]*):<\/strong>([^<]+?)(?:<br\s*\/?>|<\/p>|$)/g;
+                const altRows = [...data.matchAll(altRegex)];
+                if (altRows.length > rows.length) {
+                    finalRows = altRows;
+                }
+            }
+
             // 遍歷所有匹配的數據行
-            for (const row of rows) {
+            for (const row of finalRows) {
                 const key = row[1].trim();
-                let value = row[2] !== '</p>' ? row[2].split(",").map((x) => x.trim()) : null;
-                if (key !== 'last') value = Number(value[0]);
+                let value = row[3] ? row[3].trim() : row[2].trim();
+
+                if (key === 'last') {
+                    // 對於 last，分割成數組並轉換為數字
+                    value = value ? value.split(",").map(x => {
+                        const num = parseFloat(x.trim());
+                        return isNaN(num) ? x.trim() : num;
+                    }) : [];
+                } else {
+                    // 對於其他字段，轉換為數字
+                    const num = Number(value);
+                    value = isNaN(num) ? 0 : num;
+                }
+
                 result[key] = value;
             }
+
             // 如果對象中所有值都是空字符串，返回 null
-            return Object.values(result).some((v) => v !== null && v !== "") ? result : null;
+            const hasValidValues = Object.values(result).some((v) => v !== null && v !== "");
+            return hasValidValues ? result : null;
         }
         return result;
     }
@@ -274,6 +309,19 @@ class DiceRoller {
         for (let roll of allRoll) {
             let key = `D${roll.face}`;
             if (!(diceCounting.indexOf(key) > -1)) continue;
+
+            // 確保 data[key] 存在
+            if (!data[key]) {
+                data[key] = { times: 0, mean: 0, max: 0, min: 0, last: [] };
+            }
+
+            // 確保 last 數組存在
+            if (!data[key].last) {
+                data[key].last = [];
+            } else if (!Array.isArray(data[key].last)) {
+                data[key].last = [];
+            }
+
             data[key].times++;
             data[key].mean = (data[key].mean * (data[key].times - 1) + roll.result) / data[key].times;
             if (roll.result === roll.face) data[key].max++;
@@ -303,13 +351,25 @@ class DiceRoller {
     `;
         for (let key in data) {
             if (key !== 'name') {
+                if (!data[key]) {
+                    console.error(`ERROR: data[${key}] is null/undefined!`);
+                    continue;
+                }
+                // 確保 last 數組存在
+                if (!data[key].last) {
+                    console.warn(`WARNING: data[${key}].last is null/undefined, initializing as empty array!`);
+                    data[key].last = [];
+                } else if (!Array.isArray(data[key].last)) {
+                    console.warn(`WARNING: data[${key}].last is not an array:`, data[key].last);
+                    data[key].last = [];
+                }
                 html += `<h2><a id="${key}"></a>${key}</h2>
                 <p><strong id="times">${game.i18n.localize("times")}:</strong> ${data[key].times}<br>
                 <strong id="mean">${game.i18n.localize("mean")}:</strong> ${data[key].mean}<br>
                 <strong id="max">${game.i18n.localize("max")}:</strong> ${data[key].max}<br>
                 <strong id="min">${game.i18n.localize("min")}:</strong> ${data[key].min}<br>
                 <strong id="last">${game.i18n.localize("last")}:</strong> ${data[key].last.join(', ')}</p>
-                
+
                 `;
             }
         }
