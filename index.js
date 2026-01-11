@@ -101,7 +101,7 @@ Hooks.on('createChatMessage', (chatMessage) => {
 
 class DiceRoller {
     constructor() {
-        // this.diceResults = {}; // 存放每種骰子的統計數據
+        // this.diceResults = {}; // Store statistics for each dice type
         // this.loadDiceResults();
         //  this.updateHTML();
     }
@@ -122,7 +122,7 @@ class DiceRoller {
             let preMessage = (html) ? DiceRoller.checkPreMessage(html) : null;
             if (preMessage) dices = [preMessage];
             if (!dices.length) return;
-            //2. check Entry Exist 
+            //2. check Entry Exist
             //if not exist, create new Entry
             await DiceRoller.checkEntryExist();
 
@@ -231,43 +231,43 @@ class DiceRoller {
     }
 
     static readHtmlCode(string, name) {
-        // 創建一個空對象
+        // Create an empty object
         const result = { name: '', D4: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D6: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D8: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D10: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D12: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D20: { times: 0, mean: 0, max: 0, min: 0, last: [] }, D100: { times: 0, mean: 0, max: 0, min: 0, last: [] } };
 
-        // 正則表達式來匹配名稱
+        // Regex to match name
         //const nameRegex = /<h1><strong>(.*?)<\/strong>.*<\/h1>/s;
         result.name = name;
 
-        // 正則表達式來匹配骰子區塊
+        // Regex to match dice blocks
         const blockRegex = /<h2[^>]*>(.*?)<\/h2>\s*<p>(.*?)<\/p>/sg;
         const blocks = [...string.matchAll(blockRegex)];
 
-        // 遍歷所有匹配的區塊
+        // Iterate through all matching blocks
         for (const block of blocks) {
             const h2Content = block[1];
             const pContent = block[2];
 
-            // 從 h2 內容中提取骰子類型 (如 D4, D6 等)
+            // Extract dice type from h2 content (like D4, D6, etc.)
             const diceTypeMatch = h2Content.match(/D\d+/);
             const diceType = diceTypeMatch ? diceTypeMatch[0] : h2Content.trim();
 
-            // 解析 p 標籤內容
+            // Parse p tag content
             const parsedData = parseData(`<p>${pContent}</p>`);
             if (parsedData) {
-                // 合併解析的數據到默認對象，保留 last 數組
+                // Merge parsed data into default object, preserving last array
                 result[diceType] = { ...result[diceType], ...parsedData };
             }
 
         }
-        // 解析區塊內容並返回對象
+        // Parse block content and return object
         function parseData(data) {
             const result = {};
 
-            // 正則表達式來匹配數據行
+            // Regex to match data rows
             const rowRegex = /<strong id="([^"]+)">([^<]*):<\/strong>\s*([^<]+?)\s*(?:<br\s*\/?>|<\/p>|$)/g;
             const rows = [...data.matchAll(rowRegex)];
 
-            // 如果沒有匹配到足夠的字段，嘗試另一個正則表達式
+            // If not enough fields matched, try another regex
             let finalRows = rows;
             if (rows.length < 5) {
                 const altRegex = /<strong id="([^"]+)">([^<]*):<\/strong>([^<]+?)(?:<br\s*\/?>|<\/p>|$)/g;
@@ -277,19 +277,19 @@ class DiceRoller {
                 }
             }
 
-            // 遍歷所有匹配的數據行
+            // Iterate through all matching data rows
             for (const row of finalRows) {
                 const key = row[1].trim();
                 let value = row[3] ? row[3].trim() : row[2].trim();
 
                 if (key === 'last') {
-                    // 對於 last，分割成數組並轉換為數字
+                    // For last, split into array and convert to numbers
                     value = value ? value.split(",").map(x => {
                         const num = parseFloat(x.trim());
                         return isNaN(num) ? x.trim() : num;
                     }) : [];
                 } else {
-                    // 對於其他字段，轉換為數字
+                    // For other fields, convert to numbers
                     const num = Number(value);
                     value = isNaN(num) ? 0 : num;
                 }
@@ -297,7 +297,7 @@ class DiceRoller {
                 result[key] = value;
             }
 
-            // 如果對象中所有值都是空字符串，返回 null
+            // If all values in object are empty strings, return null
             const hasValidValues = Object.values(result).some((v) => v !== null && v !== "");
             return hasValidValues ? result : null;
         }
@@ -310,12 +310,12 @@ class DiceRoller {
             let key = `D${roll.face}`;
             if (!(diceCounting.indexOf(key) > -1)) continue;
 
-            // 確保 data[key] 存在
+            // Ensure data[key] exists
             if (!data[key]) {
                 data[key] = { times: 0, mean: 0, max: 0, min: 0, last: [] };
             }
 
-            // 確保 last 數組存在
+            // Ensure last array exists
             if (!data[key].last) {
                 data[key].last = [];
             } else if (!Array.isArray(data[key].last)) {
@@ -355,7 +355,7 @@ class DiceRoller {
                     console.error(`ERROR: data[${key}] is null/undefined!`);
                     continue;
                 }
-                // 確保 last 數組存在
+                // Ensure last array exists
                 if (!data[key].last) {
                     console.warn(`WARNING: data[${key}].last is null/undefined, initializing as empty array!`);
                     data[key].last = [];
