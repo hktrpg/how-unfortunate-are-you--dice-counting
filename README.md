@@ -1,7 +1,9 @@
 # How unfortunate are you? DiceCounting
 
 ![Download](https://img.shields.io/github/downloads/hktrpg/How-unfortunate-are-you--Dice-Counting/total)
-<a href="https://patreon.com/HKTRPG"><img src="https://img.shields.io/endpoint.svg?url=https://shieldsio-patreon.vercel.app/api/?username=HKTRPG&type=patrons" /></a>
+[![Patreon](https://img.shields.io/badge/Patreon-HKTRPG-FF424D?logo=patreon&logoColor=white)](https://patreon.com/HKTRPG)
+
+If you love it, you can [buy me a tea ☕](https://patreon.com/HKTRPG) to support the project.
 
 Tiny module. Counting D4, D6, D8, D10, D12, D20, D100 roll result, like times, mean.
 
