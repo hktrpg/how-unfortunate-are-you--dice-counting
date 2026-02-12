@@ -2,7 +2,7 @@
   "id": "how-unfortunate-are-you--dice-counting",
   "title": "How unfortunate are you? Dice Counting",
   "description": "Tiny module. Counting D4, D6, D8, D10, D12, D20, D100 roll result, like times, mean.",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "compatibility": {
     "minimum": "10",
     "verified": "13"
